@@ -1,0 +1,141 @@
+name: Build TrustDice Blog App
+
+on:
+  workflow_dispatch: # Allows manual triggering from the GitHub UI
+    inputs:
+      bambooBuildId:
+        description: 'Bamboo build key'
+        required: true
+        type: string
+      vercelProjectTarget:
+        description: 'Which Vercel project to use (test/prod)'
+        required: true
+        default: 'test'
+
+run-name: "${{ inputs.bambooBuildId && format('Triggered by Bamboo: {0} ({1})', inputs.bambooBuildId, inputs.vercelProjectTarget) || null }}"
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.vercelProjectTarget == 'prod' && 'production' || 'testing' }}
+    permissions:
+      contents: read
+      packages: read
+
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID_TEST: ${{ secrets.VERCEL_PROJECT_ID_TEST }}
+      VERCEL_PROJECT_ID_PROD: ${{ secrets.VERCEL_PROJECT_ID_PROD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      NODE_ENV: production
+      VERCEL_ENV: ${{ inputs.vercelProjectTarget == 'prod' && 'production' || 'preview' }}
+
+    steps:
+      - name: Validate branch for production
+        if: ${{ inputs.vercelProjectTarget == 'prod' && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "Production release is only allowed on 'main' branch. Current: ${{ github.ref }}"
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+          run_install: false
+
+      - name: Configure npm authentication
+        run: |
+          echo "@team4trust:registry=https://npm.pkg.github.com/" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_ACCESS_PAT }}" >> ~/.npmrc
+          echo "always-auth=true" >> ~/.npmrc
+
+      - name: Select Project ID
+        id: select_project
+        run: |
+          if [[ "${{ inputs.vercelProjectTarget }}" == "prod" ]]; then
+            echo "VERCEL_PROJECT_ID=${VERCEL_PROJECT_ID_PROD}" >> $GITHUB_ENV
+            echo "API_ENV=production" >> $GITHUB_ENV
+          else
+            echo "VERCEL_PROJECT_ID=${VERCEL_PROJECT_ID_TEST}" >> $GITHUB_ENV
+            echo "API_ENV=test" >> $GITHUB_ENV
+          fi
+
+      - name: Write .vercel/project.json
+        run: |
+          rm -Rf .next
+          rm -Rf .vercel/output
+          mkdir -p .vercel
+
+          if [ -f .vercel/project.json ]; then
+            cp .vercel/project.json .vercel/project.json.tmp
+            jq --arg projectId "$VERCEL_PROJECT_ID" \
+              --arg orgId "$VERCEL_ORG_ID" \
+              '.projectId = $projectId | .orgId = $orgId' \
+              .vercel/project.json.tmp > .vercel/project.json
+          fi
+
+          cat .vercel/project.json
+
+      - name: Install dependencies (pnpm)
+        run: pnpm install --prod=false
+
+      - name: Vercel Build App
+        env:
+          # Unique version per workflow run — git SHA + run number so reruns of the
+          # same commit don't collide. Available at build time so next.config.js can
+          # bake it into assetPrefix, and reused at upload time so the R2 path matches.
+          VERCEL_DEPLOYMENT_ID: ${{ github.sha }}-${{ github.run_number }}
+        run: |
+          echo "GHOST_CONTENT_API_KEY=${{ secrets.GHOST_CONTENT_API_KEY }}" > .env
+
+          npx vercel build --prod --debug 2>&1
+
+      - name: Upload static assets to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          NEXT_PUBLIC_APP_NAME: ${{ secrets.NEXT_PUBLIC_APP_NAME }}
+          VERCEL_DEPLOYMENT_ID: ${{ github.sha }}-${{ github.run_number }}
+        run: |
+          if [ -z "$R2_BUCKET" ]; then
+            echo "⚠️ R2_BUCKET not set, skipping R2 upload"
+            exit 0
+          fi
+
+          # vercel build outputs to .vercel/output/static — use that as source
+          if [ -d ".vercel/output/static/_next/static" ]; then
+            export STATIC_DIR=".vercel/output/static/_next/static"
+          elif [ -d ".next/static" ]; then
+            export STATIC_DIR=".next/static"
+          else
+            echo "⚠️ No static assets directory found, skipping R2 upload"
+            exit 0
+          fi
+
+          echo "📦 Deployment version: $VERCEL_DEPLOYMENT_ID"
+          echo "📂 Static dir: $STATIC_DIR"
+
+          npx wrangler --version
+          bash ./scripts/upload-static-to-r2.sh
+
+      - name: Vercel Deploy App
+        run: |
+          echo "===================================================="
+          echo "🎯 Deploy Target: ${{ inputs.vercelProjectTarget }}"
+          echo "🏷️ VERCEL_PROJECT_ID: $VERCEL_PROJECT_ID"
+          echo "===================================================="
+
+          echo "🚀 Deploying to production environment (production domain)..."
+
+          npx vercel deploy --prebuilt --prod --token $VERCEL_TOKEN --yes
+
+          echo "✅ Deployment to production finished."
