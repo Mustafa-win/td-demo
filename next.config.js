@@ -1,5 +1,4 @@
 /** @type {import('next').NextConfig} */
-const { DefinePlugin } = require('webpack')
 
 // ---------------------------------------------------------------------------
 // CDN / Asset Prefix Configuration  (core piece under test)
@@ -17,18 +16,12 @@ const nextConfig = {
   reactStrictMode: true,
   ...(assetPrefix ? { assetPrefix } : {}),
 
-  images: {
-    unoptimized: true
+  env: {
+    API_ENV: process.env.API_ENV || 'test'
   },
 
-  webpack(config) {
-    config.plugins.push(
-      new DefinePlugin({
-        'process.env.API_ENV': JSON.stringify(process.env.API_ENV || 'test'),
-        'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
-      })
-    )
-    return config
+  images: {
+    unoptimized: true
   }
 }
 
