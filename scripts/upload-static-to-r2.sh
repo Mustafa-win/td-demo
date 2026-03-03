@@ -30,7 +30,8 @@ DEPLOY_ID="${VERCEL_DEPLOYMENT_ID:?'VERCEL_DEPLOYMENT_ID is required'}"
 DEPLOY_ENV="${VERCEL_ENV:?'VERCEL_ENV is required'}"
 APP_NAME="${NEXT_PUBLIC_APP_NAME:?'NEXT_PUBLIC_APP_NAME is required'}"
 BUCKET="${R2_BUCKET:?'R2_BUCKET is required'}"
-ACCOUNT_ID="${R2_ACCOUNT_ID:?'R2_ACCOUNT_ID is required'}"
+# Wrangler v4 reads account ID from CLOUDFLARE_ACCOUNT_ID env var
+export CLOUDFLARE_ACCOUNT_ID="${R2_ACCOUNT_ID:?'R2_ACCOUNT_ID is required'}"
 DEST_PREFIX="app/${DEPLOY_ENV}/${APP_NAME}/v/${DEPLOY_ID}/_next/static"
 
 # ---------------------------------------------------------------------------
@@ -86,8 +87,7 @@ find "$STATIC_DIR" -type f | while read -r FILE; do
     --file "$FILE" \
     --content-type "$CONTENT_TYPE" \
     --cache-control "public, max-age=31536000, immutable" \
-    --account-id "$ACCOUNT_ID" \
-    --quiet
+    --remote
 
   FILE_COUNT=$((FILE_COUNT + 1))
 done
