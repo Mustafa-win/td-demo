@@ -1,12 +1,16 @@
 name: Manual Deploy to Vercel & Cloudflare R2
 
-# This is the "workflow_dispatch" trigger that allows you to run it with a button click
 on:
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_PROD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -14,17 +18,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20" # Change to 18 if your app requires older Node
+          node-version: "20"
 
       - name: Install Dependencies
         run: npm install
 
-      - name: Deploy to Vercel
+      - name: Vercel Pull
+        run: npx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+
+      - name: Vercel Build
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_PROD }}
           NEXT_PUBLIC_APP_NAME: ${{ secrets.NEXT_PUBLIC_APP_NAME }}
-        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} && npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }} && npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+          VERCEL_DEPLOYMENT_ID: ${{ github.sha }}-${{ github.run_number }}
+          VERCEL_ENV: production
+        run: npx vercel build --prod --token=$VERCEL_TOKEN
 
       - name: Upload static assets to R2
         env:
@@ -33,37 +40,27 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           NEXT_PUBLIC_APP_NAME: ${{ secrets.NEXT_PUBLIC_APP_NAME }}
           VERCEL_DEPLOYMENT_ID: ${{ github.sha }}-${{ github.run_number }}
+          VERCEL_ENV: production
         run: |
           if [ -z "$R2_BUCKET" ]; then
-            echo "⚠️ R2_BUCKET not set, skipping R2 upload"
+            echo "R2_BUCKET not set, skipping R2 upload"
             exit 0
           fi
 
-          # vercel build outputs to .vercel/output/static — use that as source
           if [ -d ".vercel/output/static/_next/static" ]; then
             export STATIC_DIR=".vercel/output/static/_next/static"
           elif [ -d ".next/static" ]; then
             export STATIC_DIR=".next/static"
           else
-            echo "⚠️ No static assets directory found, skipping R2 upload"
+            echo "No static assets directory found, skipping R2 upload"
             exit 0
           fi
 
-          echo "📦 Deployment version: $VERCEL_DEPLOYMENT_ID"
-          echo "📂 Static dir: $STATIC_DIR"
+          echo "Deployment version: $VERCEL_DEPLOYMENT_ID"
+          echo "Static dir: $STATIC_DIR"
 
           npx wrangler --version
           bash ./scripts/upload-static-to-r2.sh
 
-      - name: Vercel Deploy App
-        run: |
-          echo "===================================================="
-          echo "🎯 Deploy Target: ${{ inputs.vercelProjectTarget }}"
-          echo "🏷️ VERCEL_PROJECT_ID: $VERCEL_PROJECT_ID"
-          echo "===================================================="
-
-          echo "🚀 Deploying to production environment (production domain)..."
-
-          npx vercel deploy --prebuilt --prod --token $VERCEL_TOKEN --yes
-
-          echo "✅ Deployment to production finished."
+      - name: Vercel Deploy
+        run: npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --yes
