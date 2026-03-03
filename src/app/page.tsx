@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import userAvatar from "../public/userAvatar.png";
+import userAvatar from "@/../public/images/userAvatar.png";
 
 export default function Home() {
   return (
