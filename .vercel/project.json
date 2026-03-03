@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_BclwqXG3exBBFkDLf42AzRJFKJzc",
+  "orgId": "team_55vN1Msc6VpRZpOI11kDWdmc",
+  "projectName": "td-cdn-demo",
+  "settings": {
+    "createdAt": 1772466251789,
+    "framework": "nextjs",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}
