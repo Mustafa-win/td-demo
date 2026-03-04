@@ -1,6 +1,8 @@
 import Image from "next/image";
 
 import userAvatar from "@/../public/images/userAvatar.png";
+import nextVG from "@/../public/next.svg";
+import vercel from "@/../public/vercel.svg";
 
 export default function Home() {
   return (
@@ -14,7 +16,7 @@ export default function Home() {
         />
         <Image
           className="dark:invert"
-          src="/next.svg"
+          src={nextVG}
           alt="Next.js logo"
           width={100}
           height={20}
@@ -22,7 +24,7 @@ export default function Home() {
         />{" "}
         <Image
           className="dark:invert"
-          src="/vercel.svg"
+          src={vercel}
           alt="Vercel logomark"
           width={16}
           height={16}
