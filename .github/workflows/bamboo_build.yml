@@ -2,14 +2,33 @@ name: Manual Deploy to Vercel & Cloudflare R2
 
 on:
   workflow_dispatch:
+    inputs:
+      bambooBuildId:
+        description: "Bamboo build key"
+        required: true
+        type: string
+      vercelProjectTarget:
+        description: "Which Vercel project to use (test/prod)"
+        required: true
+        default: "test"
+
+run-name: "${{ inputs.bambooBuildId && format('Triggered by Bamboo: {0} ({1})', inputs.bambooBuildId, inputs.vercelProjectTarget) || null }}"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
+      - name: Validate branch for production
+        if: ${{ inputs.vercelProjectTarget == 'prod' && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "Production release is only allowed on 'main' branch. Current: ${{ github.ref }}"
+          exit 1
+
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -17,6 +36,48 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Create test CI version
+        if: ${{ inputs.vercelProjectTarget == 'test' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          DATE=$(date -u +%Y%m%d)
+          TIME=$(date -u +%H%M)
+          SHA=$(git rev-parse --short HEAD)
+          CI_VERSION="ci.${DATE}.${TIME}.${SHA}"
+
+          echo "CI version: $CI_VERSION"
+
+          jq --arg v "$CI_VERSION" '.version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+          git add package.json
+          git commit -m "ci: bump to CI version $CI_VERSION [local-only]"
+
+          echo "APP_VERSION=$CI_VERSION" >> $GITHUB_ENV
+
+      - name: Create production version
+        if: ${{ inputs.vercelProjectTarget == 'prod' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          CURRENT_VERSION=$(jq -r '.version' package.json)
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          NEW_VERSION="${MAJOR}.${MINOR}.$(( PATCH + 1 ))"
+
+          echo "Version bump: $CURRENT_VERSION -> $NEW_VERSION"
+
+          jq --arg v "$NEW_VERSION" '.version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+          git add package.json
+          git commit -m "chore(release): v${NEW_VERSION} [skip ci]"
+
+          echo "APP_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
       - name: Install Dependencies
         run: npm install
@@ -30,6 +91,10 @@ jobs:
           VERCEL_DEPLOYMENT_ID: ${{ github.sha }}-${{ github.run_number }}
           VERCEL_ENV: production
         run: npx vercel build --prod --token=$VERCEL_TOKEN
+
+      - name: Push version commit
+        if: ${{ inputs.vercelProjectTarget == 'prod' }}
+        run: git push
 
       - name: Upload static assets to R2
         env:
@@ -61,4 +126,10 @@ jobs:
           bash ./scripts/upload-static-to-r2.sh
 
       - name: Vercel Deploy
-        run: npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --yes
+        run: |
+          echo "===================================================="
+          echo "Deploy Target: ${{ inputs.vercelProjectTarget }}"
+          echo "APP_VERSION: $APP_VERSION"
+          echo "===================================================="
+
+          npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --yes
