@@ -3,10 +3,6 @@ name: Manual Deploy to Vercel & Cloudflare R2
 on:
   workflow_dispatch:
     inputs:
-      bambooBuildId:
-        description: "Bamboo build key"
-        required: true
-        type: string
       vercelProjectTarget:
         description: "Which Vercel project to use (test/prod)"
         required: true
@@ -125,11 +121,3 @@ jobs:
           npx wrangler --version
           bash ./scripts/upload-static-to-r2.sh
 
-      - name: Vercel Deploy
-        run: |
-          echo "===================================================="
-          echo "Deploy Target: ${{ inputs.vercelProjectTarget }}"
-          echo "APP_VERSION: $APP_VERSION"
-          echo "===================================================="
-
-          npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --yes
