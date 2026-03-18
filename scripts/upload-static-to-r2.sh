@@ -65,24 +65,8 @@ find "$STATIC_DIR" -type f | while read -r FILE; do
   RELATIVE_PATH="${FILE#$STATIC_DIR/}"
   OBJECT_KEY="${DEST_PREFIX}/${RELATIVE_PATH}"
 
-  # TODO: entire /_next/static
-  # Determine content-type based on extension
-  CONTENT_TYPE="application/octet-stream"
-  case "$FILE" in
-    *.js)    CONTENT_TYPE="application/javascript" ;;
-    *.css)   CONTENT_TYPE="text/css" ;;
-    *.json)  CONTENT_TYPE="application/json" ;;
-    *.map)   CONTENT_TYPE="application/json" ;;
-    *.svg)   CONTENT_TYPE="image/svg+xml" ;;
-    *.png)   CONTENT_TYPE="image/png" ;;
-    *.jpg|*.jpeg) CONTENT_TYPE="image/jpeg" ;;
-    *.webp)  CONTENT_TYPE="image/webp" ;;
-    *.avif)  CONTENT_TYPE="image/avif" ;;
-    *.woff)  CONTENT_TYPE="font/woff" ;;
-    *.woff2) CONTENT_TYPE="font/woff2" ;;
-    *.txt)   CONTENT_TYPE="text/plain" ;;
-    *.html)  CONTENT_TYPE="text/html" ;;
-  esac
+  # Auto-detect content-type from file extension
+  CONTENT_TYPE=$(python3 -c "import mimetypes; print(mimetypes.guess_type('$FILE')[0] or 'application/octet-stream')")
 
   $WRANGLER r2 object put "${BUCKET}/${OBJECT_KEY}" \
     --file "$FILE" \
