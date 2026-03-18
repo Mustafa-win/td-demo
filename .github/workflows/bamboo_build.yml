@@ -52,7 +52,7 @@ jobs:
           git add package.json
           git commit -m "ci: bump to CI version $CI_VERSION [local-only]"
 
-          echo "APP_VERSION=$CI_VERSION" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_APP_VERSION=$CI_VERSION" >> $GITHUB_ENV
 
       - name: Create production version
         if: ${{ inputs.vercelProjectTarget == 'prod' }}
@@ -73,7 +73,7 @@ jobs:
           git add package.json
           git commit -m "chore(release): v${NEW_VERSION} [skip ci]"
 
-          echo "APP_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_APP_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
       - name: Install Dependencies
         run: npm install
