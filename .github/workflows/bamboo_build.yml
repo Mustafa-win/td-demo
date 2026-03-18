@@ -84,7 +84,6 @@ jobs:
       - name: Vercel Build
         env:
           NEXT_PUBLIC_APP_NAME: ${{ secrets.NEXT_PUBLIC_APP_NAME }}
-          VERCEL_DEPLOYMENT_ID: ${{ github.sha }}-${{ github.run_number }}
           VERCEL_ENV: production
         run: npx vercel build --prod --token=$VERCEL_TOKEN
 
@@ -98,7 +97,7 @@ jobs:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           NEXT_PUBLIC_APP_NAME: ${{ secrets.NEXT_PUBLIC_APP_NAME }}
-          VERCEL_DEPLOYMENT_ID: ${{ github.sha }}-${{ github.run_number }}
+          NEXT_PUBLIC_APP_VERSION: ${{ env.NEXT_PUBLIC_APP_VERSION }}
           VERCEL_ENV: production
         run: |
           if [ -z "$R2_BUCKET" ]; then
@@ -115,9 +114,17 @@ jobs:
             exit 0
           fi
 
-          echo "Deployment version: $VERCEL_DEPLOYMENT_ID"
+          echo "Deployment version: $NEXT_PUBLIC_APP_VERSION"
           echo "Static dir: $STATIC_DIR"
 
           npx wrangler --version
           bash ./scripts/upload-static-to-r2.sh
 
+      - name: Vercel Deploy
+        run: |
+          echo "===================================================="
+          echo "Deploy Target: ${{ inputs.vercelProjectTarget }}"
+          echo "NEXT_PUBLIC_APP_VERSION: $NEXT_PUBLIC_APP_VERSION"
+          echo "===================================================="
+
+          npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --yes

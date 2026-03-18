@@ -7,12 +7,12 @@
 # even after a new Vercel deploy — eliminating stale-cache 404s.
 #
 # Usage:
-#   VERCEL_DEPLOYMENT_ID=dpl_xxx VERCEL_ENV=production NEXT_PUBLIC_APP_NAME=trustdice-web \
+#   NEXT_PUBLIC_APP_VERSION=0.1.1 VERCEL_ENV=production NEXT_PUBLIC_APP_NAME=trustdice-web \
 #     R2_BUCKET=my-bucket R2_ACCOUNT_ID=abc123 STATIC_DIR=.next/static \
 #     ./scripts/upload-static-to-r2.sh
 #
 # Required environment variables:
-#   VERCEL_DEPLOYMENT_ID   — unique deployment identifier
+#   NEXT_PUBLIC_APP_VERSION            — version from package.json (set by CI)
 #   VERCEL_ENV             — deployment environment ('production' | 'preview')
 #   NEXT_PUBLIC_APP_NAME   — application name (e.g. 'trustdice-web')
 #   R2_BUCKET              — name of the Cloudflare R2 bucket
@@ -26,7 +26,7 @@ set -euo pipefail
 # Config
 # ---------------------------------------------------------------------------
 STATIC_DIR="${STATIC_DIR:?'STATIC_DIR is required'}"
-DEPLOY_ID="${VERCEL_DEPLOYMENT_ID:?'VERCEL_DEPLOYMENT_ID is required'}"
+DEPLOY_ID="${NEXT_PUBLIC_APP_VERSION:?'NEXT_PUBLIC_APP_VERSION is required'}"
 DEPLOY_ENV="${VERCEL_ENV:?'VERCEL_ENV is required'}"
 APP_NAME="${NEXT_PUBLIC_APP_NAME:?'NEXT_PUBLIC_APP_NAME is required'}"
 BUCKET="${R2_BUCKET:?'R2_BUCKET is required'}"
@@ -65,6 +65,7 @@ find "$STATIC_DIR" -type f | while read -r FILE; do
   RELATIVE_PATH="${FILE#$STATIC_DIR/}"
   OBJECT_KEY="${DEST_PREFIX}/${RELATIVE_PATH}"
 
+  # TODO: entire /_next/static
   # Determine content-type based on extension
   CONTENT_TYPE="application/octet-stream"
   case "$FILE" in
